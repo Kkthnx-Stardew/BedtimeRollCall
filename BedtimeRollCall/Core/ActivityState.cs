@@ -1,4 +1,4 @@
-namespace CoopSleepAfk.Core
+namespace BedtimeRollCall.Core
 {
     /// <summary>What a player is doing, as that player's own copy of the mod reports it. The game does not sync any of this.</summary>
     public enum ActivityState

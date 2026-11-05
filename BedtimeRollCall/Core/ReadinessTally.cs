@@ -1,4 +1,4 @@
-namespace CoopSleepAfk.Core
+namespace BedtimeRollCall.Core
 {
     /// <summary>One online player as the tally sees them.</summary>
     public readonly record struct TallyPlayer(long Id, string Name, BedState Bed, ActivityState Activity);

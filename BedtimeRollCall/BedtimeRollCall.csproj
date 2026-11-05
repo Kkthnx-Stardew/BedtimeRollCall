@@ -3,8 +3,8 @@
 		<TargetFramework>net6.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<RootNamespace>CoopSleepAfk</RootNamespace>
-		<AssemblyName>CoopSleepAfk</AssemblyName>
+		<RootNamespace>BedtimeRollCall</RootNamespace>
+		<AssemblyName>BedtimeRollCall</AssemblyName>
 		<Version>0.1.0</Version>
 		<!-- the design uses events only, so Harmony is not referenced -->
 		<EnableHarmony>false</EnableHarmony>

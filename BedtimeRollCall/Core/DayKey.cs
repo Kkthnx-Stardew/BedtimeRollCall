@@ -1,4 +1,4 @@
-namespace CoopSleepAfk.Core
+namespace BedtimeRollCall.Core
 {
     /// <summary>Names a game day, so a report from yesterday is never mistaken for today's.</summary>
     public static class DayKey

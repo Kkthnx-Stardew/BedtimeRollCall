@@ -1,6 +1,6 @@
-using CoopSleepAfk.Core;
+using BedtimeRollCall.Core;
 
-namespace CoopSleepAfk.Tests
+namespace BedtimeRollCall.Tests
 {
     public class AfkClockTests
     {

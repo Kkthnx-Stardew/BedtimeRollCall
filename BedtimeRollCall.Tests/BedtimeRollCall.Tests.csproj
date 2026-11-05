@@ -19,7 +19,7 @@
 
   <ItemGroup>
     <!-- The logic in Core has no game dependencies, so the tests compile it directly. -->
-    <Compile Include="..\CoopSleepAfk\Core\*.cs" LinkBase="Core" />
+    <Compile Include="..\BedtimeRollCall\Core\*.cs" LinkBase="Core" />
   </ItemGroup>
 
 </Project>

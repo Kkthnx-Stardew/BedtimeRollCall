@@ -3,7 +3,7 @@ using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
 using StardewValley.Menus;
 
-namespace CoopSleepAfk.Hud
+namespace BedtimeRollCall.Hud
 {
     /// <summary>Draws the sleep panel under the clock. Fonts and the pixel texture are the game's own, nothing is loaded per frame.</summary>
     internal static class SleepHud

@@ -1,12 +1,12 @@
-using CoopSleepAfk.Core;
+using BedtimeRollCall.Core;
 
-namespace CoopSleepAfk.Net
+namespace BedtimeRollCall.Net
 {
     /// <summary>The message types this mod sends through SMAPI. Every message class needs a parameterless constructor to be read back.</summary>
     internal static class MessageTypes
     {
-        public const string State = "CoopSleepAfk.State";
-        public const string Rules = "CoopSleepAfk.Rules";
+        public const string State = "BedtimeRollCall.State";
+        public const string Rules = "BedtimeRollCall.Rules";
     }
 
     /// <summary>One player's own report of what they are doing. Sent when it changes and every few seconds after that.</summary>

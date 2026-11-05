@@ -1,6 +1,6 @@
 # Design notes
 
-Co-op Sleep and AFK Toolkit for Stardew Valley 1.6.15 (build 24356) and SMAPI 4.2.1 or newer. The starting point was a research blueprint with a list of open questions. Every row below was read from the decompiled 1.6.15 game code, not taken from the blueprint.
+Bedtime Roll Call for Stardew Valley 1.6.15 (build 24356) and SMAPI 4.2.1 or newer. The starting point was a research blueprint with a list of open questions. Every row below was read from the decompiled 1.6.15 game code, not taken from the blueprint.
 
 ## What the game code says
 

@@ -1,13 +1,13 @@
 using System.Diagnostics;
-using CoopSleepAfk.Core;
-using CoopSleepAfk.Hud;
-using CoopSleepAfk.Net;
+using BedtimeRollCall.Core;
+using BedtimeRollCall.Hud;
+using BedtimeRollCall.Net;
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 
-namespace CoopSleepAfk
+namespace BedtimeRollCall
 {
     /// <summary>
     /// A panel that shows who is in bed in a co-op session and who is idle, and an idle tracker that tells the other players. It reads the

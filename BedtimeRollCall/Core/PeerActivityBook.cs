@@ -1,4 +1,4 @@
-namespace CoopSleepAfk.Core
+namespace BedtimeRollCall.Core
 {
     /// <summary>
     /// The last activity report heard from each other player. A report that is too old, or that is from another game day, counts for

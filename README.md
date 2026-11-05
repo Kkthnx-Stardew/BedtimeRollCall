@@ -1,4 +1,4 @@
-# Co-op Sleep and AFK Toolkit
+# Bedtime Roll Call
 
 A Stardew Valley mod for co-op sessions with friends. It shows who is in bed and who is idle, and it tells the other players when someone has gone quiet. It changes nothing in the game and saves nothing, so removing it leaves the save exactly as vanilla.
 
@@ -31,8 +31,8 @@ See `docs/DESIGN.md` for what was checked in the 1.6.15 game code and what is no
 ## Building and testing
 
 ```bash
-dotnet build CoopSleepAfk.slnx -c Release
-dotnet test CoopSleepAfk.Tests/CoopSleepAfk.Tests.csproj
+dotnet build BedtimeRollCall.slnx -c Release
+dotnet test BedtimeRollCall.Tests/BedtimeRollCall.Tests.csproj
 ```
 
-The build does not copy into the game's Mods folder. The zip lands in `CoopSleepAfk/bin/Release/net6.0/`.
+The build does not copy into the game's Mods folder. The zip lands in `BedtimeRollCall/bin/Release/net6.0/`.

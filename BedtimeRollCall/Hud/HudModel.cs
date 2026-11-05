@@ -1,6 +1,6 @@
 using Microsoft.Xna.Framework;
 
-namespace CoopSleepAfk.Hud
+namespace BedtimeRollCall.Hud
 {
     /// <summary>One line of the panel. The text always says the state, so colour is never the only signal.</summary>
     internal readonly record struct HudLine(string Text, Color Color);

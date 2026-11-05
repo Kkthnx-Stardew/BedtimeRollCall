@@ -1,4 +1,4 @@
-namespace CoopSleepAfk
+namespace BedtimeRollCall
 {
     /// <summary>Settings in config.json. The host's idle rules (threshold and whether idle counts as ready) apply to every player who has the mod.</summary>
     public sealed class ModConfig

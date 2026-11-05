@@ -1,4 +1,4 @@
-namespace CoopSleepAfk.Core
+namespace BedtimeRollCall.Core
 {
     /// <summary>
     /// Counts how long the local player has gone without input. The game has no signal for this. Time only counts while the player is free
