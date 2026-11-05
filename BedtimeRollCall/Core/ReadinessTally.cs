@@ -4,8 +4,8 @@ namespace BedtimeRollCall.Core
     public readonly record struct TallyPlayer(long Id, string Name, BedState Bed, ActivityState Activity);
 
     /// <summary>
-    /// How many players are ready for the night, by this mod's rules. The game's own answer is separate (<c>Game1.netReady</c>). This one also
-    /// knows who is idle, and it never counts a player who is in an event as ready.
+    /// How many players are ready for the night, by this mod's rules. A player is ready once the game has started their sleep.
+    /// The game's own count is separate (<c>Game1.netReady</c>). This one also knows who is idle, and it never counts a player in an event as ready.
     /// </summary>
     public sealed record Tally(int Ready, int Total, int Untracked, IReadOnlyList<string> Blocked, IReadOnlyList<string> Idle)
     {
@@ -36,7 +36,7 @@ namespace BedtimeRollCall.Core
                 if (player.Activity == ActivityState.Afk && !inBed)
                     idle.Add(player.Name);
 
-                if (inBed || (player.Activity == ActivityState.Afk && afkCountsAsReady))
+                if (player.Bed == BedState.Confirmed || (player.Activity == ActivityState.Afk && afkCountsAsReady))
                     ready++;
             }
 

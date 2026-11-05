@@ -2,6 +2,7 @@ using System.Diagnostics;
 using BedtimeRollCall.Core;
 using BedtimeRollCall.Hud;
 using BedtimeRollCall.Net;
+using BedtimeRollCall.Sleep;
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
@@ -33,6 +34,8 @@ namespace BedtimeRollCall
         private double _lastSentAt = double.NegativeInfinity;
         private bool _warned;
         private HudModel? _hud;
+        private readonly BedTrip _trip = new();
+        private bool _autoTriedToday;
 
         public override void Entry(IModHelper helper)
         {
@@ -51,6 +54,7 @@ namespace BedtimeRollCall
             helper.Events.GameLoop.ReturnedToTitle += (_, _) => ResetSession();
             helper.Events.GameLoop.DayStarted += OnDayStarted;
             helper.Events.GameLoop.OneSecondUpdateTicked += OnOneSecondUpdateTicked;
+            helper.Events.GameLoop.UpdateTicked += (_, _) => _trip.Tick();
             helper.Events.Input.ButtonPressed += OnButtonPressed;
             helper.Events.Input.CursorMoved += OnCursorMoved;
             helper.Events.Display.RenderedHud += OnRenderedHud;
@@ -78,6 +82,8 @@ namespace BedtimeRollCall
             _hasLastPosition = false;
             _warned = false;
             _hud = null;
+            _trip.Cancel();
+            _autoTriedToday = false;
             _lastSent = ActivityState.Unknown;
             _lastSentAt = double.NegativeInfinity;
             _myActivity = ActivityState.Active;
@@ -88,6 +94,8 @@ namespace BedtimeRollCall
             // everyone wakes up active, and yesterday's reports no longer match the day key
             _clock.NoteActivity();
             _warned = false;
+            _trip.Cancel();
+            _autoTriedToday = false;
             if (Context.IsMainPlayer && Context.IsMultiplayer)
                 SendRules(null);
         }
@@ -102,7 +110,49 @@ namespace BedtimeRollCall
 
         // ---- input -------------------------------------------------------------
 
-        private void OnButtonPressed(object? sender, ButtonPressedEventArgs e) => NoteActivity();
+        private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
+        {
+            NoteActivity();
+            if (Context.IsWorldReady && _config.GoToBedKey.JustPressed())
+                GoToBedNow();
+        }
+
+        // ---- going to bed --------------------------------------------------------
+
+        internal bool IsGoingToBed => _trip.Active;
+
+        internal double IdleSeconds => _clock.IdleSeconds;
+
+        internal ActivityState Activity => _myActivity;
+
+        /// <summary>The go to bed key. A refusal from the rules is shown to the player.</summary>
+        internal SleepBlock GoToBedNow()
+        {
+            var block = _trip.Begin();
+            if (block != SleepBlock.None)
+                Game1.addHUDMessage(new HUDMessage(Helper.Translation.Get(SleepPolicy.ReasonKey(block)), HUDMessage.error_type));
+            return block;
+        }
+
+        /// <summary>The idle player's own opt in trip. A refusal is only logged because the player did not ask for it.</summary>
+        private void StartAutoTrip()
+        {
+            var block = _trip.Begin();
+            if (block == SleepBlock.None)
+                Game1.addHUDMessage(new HUDMessage("You were idle, so you are going to bed. Press Cancel on the sleep screen to stay up.") { noIcon = true });
+            else
+                Monitor.Log($"Auto sleep did not start ({block}).", LogLevel.Trace);
+        }
+
+        public override object GetApi() => new BedtimeRollCallApi(this);
+
+        internal string[] PanelLines() => _hud is null ? Array.Empty<string>() : _hud.Lines.Select(l => l.Text).Prepend(_hud.Header).ToArray();
+
+        internal void DrawPanel(Microsoft.Xna.Framework.Graphics.SpriteBatch spriteBatch)
+        {
+            if (_hud is not null)
+                SleepHud.Draw(spriteBatch, _hud, _config.HudScale);
+        }
 
         private void OnCursorMoved(object? sender, CursorMovedEventArgs e)
         {
@@ -152,6 +202,16 @@ namespace BedtimeRollCall
 
                 Broadcast();
                 _hud = BuildHud(me, warning ? _clock.SecondsUntilAfk(threshold) : -1);
+
+                if (_config.AutoSleepWhenIdle && _myActivity == ActivityState.Afk)
+                {
+                    int othersInBed = Game1.getOnlineFarmers().Count(f => !f.IsLocalPlayer && !f.IsDedicatedPlayer && ReadBed(f) != BedState.Out);
+                    if (SleepPolicy.ShouldAutoSleep(true, true, othersInBed, _autoTriedToday, SleepPolicy.Check(BedTrip.Describe())))
+                    {
+                        _autoTriedToday = true;
+                        StartAutoTrip();
+                    }
+                }
             }
             catch (Exception ex)
             {

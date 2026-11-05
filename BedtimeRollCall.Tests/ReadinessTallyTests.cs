@@ -15,7 +15,7 @@ namespace BedtimeRollCall.Tests
         }
 
         [Fact]
-        public void Players_in_bed_count_whether_or_not_they_have_the_mod()
+        public void Only_players_whose_sleep_has_started_count_whether_or_not_they_have_the_mod()
         {
             var tally = ReadinessTally.Compute(new[]
             {
@@ -23,7 +23,7 @@ namespace BedtimeRollCall.Tests
                 P("Bob", BedState.InBed, ActivityState.Unknown),
                 P("Carol", BedState.Out, ActivityState.Active)
             }, afkCountsAsReady: false);
-            Assert.Equal(2, tally.Ready);
+            Assert.Equal(1, tally.Ready);
             Assert.Equal(3, tally.Total);
             Assert.False(tally.AllReady);
         }
@@ -64,7 +64,7 @@ namespace BedtimeRollCall.Tests
         {
             var tally = ReadinessTally.Compute(new[] { P("Dave", BedState.InBed, ActivityState.InEvent) }, afkCountsAsReady: false);
             Assert.Empty(tally.Blocked);
-            Assert.Equal(1, tally.Ready);
+            Assert.Equal(0, tally.Ready);
         }
 
         [Fact]

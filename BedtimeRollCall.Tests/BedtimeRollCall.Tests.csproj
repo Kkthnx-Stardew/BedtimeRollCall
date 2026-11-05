@@ -20,6 +20,7 @@
   <ItemGroup>
     <!-- The logic in Core has no game dependencies, so the tests compile it directly. -->
     <Compile Include="..\BedtimeRollCall\Core\*.cs" LinkBase="Core" />
+    <None Include="..\BedtimeRollCall\i18n\default.json" Link="i18n\default.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

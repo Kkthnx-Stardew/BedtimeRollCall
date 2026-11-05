@@ -1,0 +1,9 @@
+{
+    "Name": "Bedtime Roll Call DevHarness",
+    "Author": "Kkthnx",
+    "Version": "0.1.0",
+    "Description": "Test tool for Bedtime Roll Call. Does nothing unless the BRC_OUT environment variable is set. Never ship this.",
+    "UniqueID": "Kkthnx.BedtimeRollCall.DevHarness",
+    "EntryDll": "BedtimeRollCall.DevHarness.dll",
+    "MinimumApiVersion": "4.2.1"
+}

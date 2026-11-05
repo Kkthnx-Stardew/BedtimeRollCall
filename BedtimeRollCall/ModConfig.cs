@@ -1,3 +1,5 @@
+using StardewModdingAPI.Utilities;
+
 namespace BedtimeRollCall
 {
     /// <summary>Settings in config.json. The host's idle rules (threshold and whether idle counts as ready) apply to every player who has the mod.</summary>
@@ -23,6 +25,12 @@ namespace BedtimeRollCall
 
         /// <summary>An idle player counts as ready in the panel. It does not make the game end the night, everyone still has to be in bed, passed out or gone.</summary>
         public bool AfkCountsAsReady { get; set; } = false;
+
+        /// <summary>Takes you to your own bed from anywhere and starts the game's sleep check, which has a Cancel button. Co-op only.</summary>
+        public KeybindList GoToBedKey { get; set; } = KeybindList.Parse("F8");
+
+        /// <summary>Send this player to bed by themselves when they are idle and at least one other player is already in bed. Off unless you turn it on, and it only ever acts on your own character.</summary>
+        public bool AutoSleepWhenIdle { get; set; } = false;
 
         /// <summary>Puts every setting inside its allowed range, so a hand edited file cannot break the mod.</summary>
         public void Normalize()

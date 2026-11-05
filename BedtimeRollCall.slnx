@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="BedtimeRollCall.Tests/BedtimeRollCall.Tests.csproj" />
+  <Project Path="BedtimeRollCall.DevHarness/BedtimeRollCall.DevHarness.csproj" />
   <Project Path="BedtimeRollCall/BedtimeRollCall.csproj" />
 </Solution>
