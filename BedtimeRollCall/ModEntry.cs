@@ -36,6 +36,7 @@ namespace BedtimeRollCall
         private HudModel? _hud;
         private readonly BedTrip _trip = new();
         private bool _autoTriedToday;
+        private readonly HashSet<long> _rulesSentTo = new();
 
         public override void Entry(IModHelper helper)
         {
@@ -78,6 +79,7 @@ namespace BedtimeRollCall
         {
             _book.Clear();
             _hostRules = null;
+            _rulesSentTo.Clear();
             _clock.NoteActivity();
             _hasLastPosition = false;
             _warned = false;
@@ -312,7 +314,11 @@ namespace BedtimeRollCall
                 SendRules(new[] { e.Peer.PlayerID });
         }
 
-        private void OnPeerDisconnected(object? sender, PeerDisconnectedEventArgs e) => _book.Remove(e.Peer.PlayerID);
+        private void OnPeerDisconnected(object? sender, PeerDisconnectedEventArgs e)
+        {
+            _book.Remove(e.Peer.PlayerID);
+            _rulesSentTo.Remove(e.Peer.PlayerID);
+        }
 
         private void SendRules(long[]? playerIds)
         {
@@ -341,6 +347,11 @@ namespace BedtimeRollCall
                         var message = e.ReadAs<StateMessage>();
                         if (Enum.IsDefined(message.State))
                             _book.Update(e.FromPlayerID, message.State, Math.Max(0, message.IdleSeconds), message.DayKey ?? "", Now);
+
+                        // the rules sent when a player connects arrive before their world is ready and are dropped, so the first report from
+                        // a player with the mod is the cue to send them again
+                        if (Context.IsMainPlayer && _rulesSentTo.Add(e.FromPlayerID))
+                            SendRules(new[] { e.FromPlayerID });
                         break;
                     }
                     case MessageTypes.Rules:
