@@ -1,0 +1,10 @@
+{
+    "Name": "Co-op Sleep and AFK Toolkit",
+    "Author": "Kkthnx",
+    "Version": "0.1.0",
+    "Description": "Shows who is in bed in a co-op session, tracks idle players and counts them as ready when the host allows it. Changes no game state and stores nothing in the save.",
+    "UniqueID": "Kkthnx.CoopSleepAfk",
+    "EntryDll": "CoopSleepAfk.dll",
+    "MinimumApiVersion": "4.2.1",
+    "MinimumGameVersion": "1.6.15"
+}
