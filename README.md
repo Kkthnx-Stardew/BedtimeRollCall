@@ -1,14 +1,14 @@
 # Bedtime Roll Call
 
-A Stardew Valley mod for co-op sessions with friends. A small panel under the clock shows who is in bed and who has gone quiet, so nobody waits at the sleep screen wondering. An optional key takes you to your own bed from anywhere, and an optional setting does it for you when you are idle and a friend is already in bed.
+A Stardew Valley mod for co-op sessions with friends. A small panel shows who is in bed and who has gone quiet, so nobody waits at the sleep screen wondering. An optional key takes you to your own bed from anywhere, and an optional setting does it for you when you are idle and a friend is already in bed.
 
 It uses no Harmony patches and saves nothing, so removing it leaves the save exactly as vanilla.
 
-Status, `0.1.0`, a first beta. Needs Stardew Valley 1.6.15 and SMAPI 4.2.1 or newer.
+Status, `0.1.0-beta.1`, the first beta. Needs Stardew Valley 1.6.15 and SMAPI 4.2.1 or newer.
 
 ## What it does
 
-- **The panel.** Under the clock, one line per online player, such as "Alice, in bed and ready", "Bob, idle 6m", "Carol, in an event" or "Dave, not tracked". The header counts the players whose sleep has started. It also shows while you wait at the game's sleep screen.
+- **The panel.** In the top left corner by default, in the game's own tooltip style, one line per online player, such as "Alice, in bed and ready", "Bob, idle 6m", "Carol, in an event" or "Dave, not tracked". The header counts the players whose sleep has started. It also shows while you wait at the game's sleep screen.
 - **Idle tracking.** After a few minutes with no input and no movement, your copy of the mod tells the others you are idle. It warns you first. Time spent in a menu, an event, a festival or in bed does not count.
 - **Go to bed key.** `F8` by default. Takes you to your own bed and opens the game's normal sleep check, where you can press Cancel. Co-op only.
 - **Go to bed when idle.** Off by default. When you are idle and at least one other player has already started sleeping, you are sent to your own bed. Once a day, only for your own character, and you can cancel.
@@ -29,6 +29,8 @@ Every setting is in the Generic Mod Config Menu if you have it, or in `config.js
 | Setting | Default | What it does |
 |---|---|---|
 | `EnableHud` | on | Show the panel |
+| `PanelPosition` | TopLeft | `TopLeft` is free in the game. `UnderClock` sits below the journal button and its new quest arrow |
+| `PanelOffsetX`, `PanelOffsetY` | 0 | Pixels to move the panel from its position, negative moves it the other way |
 | `HudScale` | 1.0 | Panel size, 0.8 to 1.4 |
 | `EnableAfkTracking` | on | Track your idle time and tell the others |
 | `AfkMinutes` | 5 | Minutes without input before you count as idle, 1 to 30. The host's value is used on a joined game |

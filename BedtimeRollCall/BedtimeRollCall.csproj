@@ -5,7 +5,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<RootNamespace>BedtimeRollCall</RootNamespace>
 		<AssemblyName>BedtimeRollCall</AssemblyName>
-		<Version>0.1.0</Version>
+		<Version>0.1.0-beta.1</Version>
 		<!-- the design uses events only, so Harmony is not referenced -->
 		<EnableHarmony>false</EnableHarmony>
 		<!-- builds never copy into the live Mods folder, which holds a large unrelated mod list -->

@@ -1,7 +1,7 @@
 {
     "Name": "Bedtime Roll Call",
     "Author": "Kkthnx",
-    "Version": "0.1.0",
+    "Version": "0.1.0-beta.1",
     "Description": "Shows who is in bed in a co-op session and who is idle, with an optional key that takes you to bed. Stores nothing in the save.",
     "UniqueID": "Kkthnx.BedtimeRollCall",
     "EntryDll": "BedtimeRollCall.dll",
