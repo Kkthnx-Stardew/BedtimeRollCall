@@ -8,34 +8,52 @@ namespace BedtimeRollCall.Hud
     /// <summary>Draws the sleep panel under the clock. Fonts and the pixel texture are the game's own, nothing is loaded per frame.</summary>
     internal static class SleepHud
     {
-        private const int Padding = 10;
-        private const int LineGap = 4;
-        private const int ScreenMargin = 8;
+        private const int Padding = 16;
+        private const int LineGap = 2;
+        private const int ScreenMargin = 16;
 
-        public static void Draw(SpriteBatch batch, HudModel model, float scale)
+        // the game sorts the HUD by layer depth, and its tooltip box is drawn at about 0.8, so the text must sit above that
+        private const float TextLayer = 0.95f;
+
+        public static void Draw(SpriteBatch batch, HudModel model, ModConfig config)
         {
             var font = Game1.smallFont;
             var box = Game1.dayTimeMoneyBox;
             if (font is null || box is null)
                 return;
 
+            float scale = config.HudScale;
             Measure(model, font, scale);
             var sizes = model.RowSizes!;
             float width = model.PanelSize.X, height = model.PanelSize.Y;
 
-            // right edge of the clock box, below it, and always fully on screen
-            float x = Math.Min(box.xPositionOnScreen + DayTimeMoneyBox.width, Game1.uiViewport.Width - ScreenMargin) - width;
-            float y = Math.Min(box.yPositionOnScreen + DayTimeMoneyBox.height + ScreenMargin, Game1.uiViewport.Height - height - ScreenMargin);
-            x = Math.Max(x, ScreenMargin);
+            var safe = Game1.game1.GraphicsDevice.Viewport.TitleSafeArea;
+            float x, y;
+            if (config.PanelPosition == PanelPosition.UnderClock)
+            {
+                // right edge of the clock box, below the journal button and the new quest arrow that hangs under it (a 16 pixel arrow drawn at 4x, 8 pixels below the button)
+                x = box.xPositionOnScreen + DayTimeMoneyBox.width - width;
+                y = box.questButton.bounds.Bottom + 8 + 64 + ScreenMargin;
+            }
+            else
+            {
+                x = safe.Left + ScreenMargin;
+                y = safe.Top + ScreenMargin;
+            }
 
-            batch.Draw(Game1.staminaRect, new Rectangle((int)x, (int)y, (int)width, (int)height), Color.Black * 0.6f);
+            // the offsets, then always fully on screen
+            x = Math.Clamp(x + config.PanelOffsetX, ScreenMargin, Math.Max(ScreenMargin, Game1.uiViewport.Width - width - ScreenMargin));
+            y = Math.Clamp(y + config.PanelOffsetY, ScreenMargin, Math.Max(ScreenMargin, Game1.uiViewport.Height - height - ScreenMargin));
+
+            // the same box the game draws its tooltips in, so the panel looks like it belongs in the game
+            IClickableMenu.drawTextureBox(batch, Game1.menuTexture, new Rectangle(0, 256, 60, 60), (int)x, (int)y, (int)width, (int)height, Color.White, 1f, true);
 
             float cursor = y + Padding;
-            Utility.drawTextWithShadow(batch, model.Header, font, new Vector2(x + Padding, cursor), model.HeaderColor, scale);
+            Utility.drawTextWithShadow(batch, model.Header, font, new Vector2(x + Padding, cursor), model.HeaderColor, scale, TextLayer);
             cursor += sizes[0].Y + LineGap;
             for (int i = 0; i < model.Lines.Count; i++)
             {
-                Utility.drawTextWithShadow(batch, model.Lines[i].Text, font, new Vector2(x + Padding, cursor), model.Lines[i].Color, scale);
+                Utility.drawTextWithShadow(batch, model.Lines[i].Text, font, new Vector2(x + Padding, cursor), model.Lines[i].Color, scale, TextLayer);
                 cursor += sizes[i + 1].Y + LineGap;
             }
         }

@@ -16,7 +16,9 @@ Stops both games after this long.
 param(
     [string] $GamePath = 'D:\SteamLibrary\steamapps\common\Stardew Valley',
     [int] $TimeoutSeconds = 600,
-    [int] $StallSeconds = 180
+    [int] $StallSeconds = 180,
+    [switch] $ClientWithoutMod,
+    [switch] $WithConfigMenu
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,7 +48,9 @@ function New-ModsFolder([string] $name, [hashtable] $config) {
     New-Item -ItemType Directory $own | Out-Null
     Copy-Item (Join-Path $repo 'BedtimeRollCall\bin\Release\net6.0\BedtimeRollCall.dll') $own
     Copy-Item (Join-Path $repo 'BedtimeRollCall\manifest.json') $own
+    Copy-Item (Join-Path $repo 'BedtimeRollCall\i18n') (Join-Path $own 'i18n') -Recurse
     $config | ConvertTo-Json | Set-Content (Join-Path $own 'config.json')
+    if ($WithConfigMenu) { Copy-Item (Join-Path $GamePath 'Mods\GenericModConfigMenu') (Join-Path $mods 'GenericModConfigMenu') -Recurse }
     $harness = Join-Path $mods 'BedtimeRollCall.DevHarness'
     New-Item -ItemType Directory $harness | Out-Null
     Copy-Item (Join-Path $repo 'BedtimeRollCall.DevHarness\bin\Debug\net6.0\BedtimeRollCall.DevHarness.dll') $harness
@@ -56,7 +60,12 @@ function New-ModsFolder([string] $name, [hashtable] $config) {
 
 $modsHost = New-ModsFolder 'ModsHost' @{ AfkMinutes = 1; WarnBeforeAfkSeconds = 10; AutoSleepWhenIdle = $false }
 # the joining player keeps the default five minutes on purpose, the host's one minute rule must win
-$modsClient = New-ModsFolder 'ModsClient' @{ AutoSleepWhenIdle = $true }
+$modsClient = New-ModsFolder 'ModsClient' @{ AutoSleepWhenIdle = $true; PanelPosition = 'UnderClock' }
+# a joining player without the mod, to check what the host sees and that the night still ends
+if ($ClientWithoutMod) {
+    Remove-Item (Join-Path $modsClient 'BedtimeRollCall') -Recurse -Force
+    $env:BRC_NOMOD = '1'
+}
 
 $prefs = Join-Path $env:APPDATA 'StardewValley\startup_preferences'
 $prefsBackup = $null
@@ -76,7 +85,7 @@ if (Test-Path (Join-Path $sync 'hostready.host')) {
     $env:BRC_OUT = Join-Path $results 'night-client.json'
     $clientProc = Start-Process -FilePath (Join-Path $GamePath 'StardewModdingAPI.exe') -ArgumentList '--no-terminal', '--mods-path', "`"$modsClient`"" -WorkingDirectory $GamePath -PassThru
 }
-Remove-Item Env:BRC_ROLE, Env:BRC_OUT, Env:BRC_SYNC -ErrorAction SilentlyContinue
+Remove-Item Env:BRC_ROLE, Env:BRC_OUT, Env:BRC_SYNC, Env:BRC_NOMOD -ErrorAction SilentlyContinue
 
 # a run that stops making progress is stopped early. Progress means a new sync file or growing logs
 $lastProgress = Get-Date

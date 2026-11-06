@@ -96,13 +96,14 @@ namespace BedtimeRollCall.DevHarness
                 if (Game1.activeClickableMenu is TitleMenu title && _ticks > 240)
                 {
                     var api = Helper.ModRegistry.GetApi<IRollCallApi>(TargetMod);
-                    if (api is null)
+                    // the joining player may run without the mod on purpose (BRC_NOMOD), to check what the host sees
+                    if (api is null && !(Environment.GetEnvironmentVariable("BRC_NOMOD") == "1" && !IsHost))
                     {
                         _results["error"] = "Bedtime Roll Call API not found";
                         Finish("no api");
                         return;
                     }
-                    _api = api;
+                    _api = api!;
                     _run = (IsHost ? HostMain(title) : ClientMain(title)).GetEnumerator();
                 }
                 else if (_ticks > 3600)
@@ -263,6 +264,11 @@ namespace BedtimeRollCall.DevHarness
             Game1.graphics.GraphicsDevice.Clear(new Color(70, 100, 70));
             b.Begin(SpriteSortMode.FrontToBack, BlendState.AlphaBlend, SamplerState.PointClamp, null, null, null, null);
             Game1.dayTimeMoneyBox.draw(b);
+            // the worst case under the clock, the journal button with its new quest arrow, drawn the way the game draws them
+            var quest = Game1.dayTimeMoneyBox.questButton;
+            quest.draw(b);
+            b.Draw(Game1.mouseCursors, new Vector2(quest.bounds.Left - 16, quest.bounds.Bottom + 8), new Rectangle(128, 208, 16, 16), Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 0.9f);
+            Game1.activeClickableMenu?.draw(b);
             _api.DrawPanel(b);
             b.End();
             Game1.graphics.GraphicsDevice.SetRenderTarget(null);
@@ -283,6 +289,49 @@ namespace BedtimeRollCall.DevHarness
             info[key] = Game1.activeClickableMenu is ReadyCheckDialog ? $"dialog after {t} ticks" : "no dialog";
         }
 
+        /// <summary>The game's own way into bed, the one a player without the mod uses: stand on the bed spot and answer the sleep question.</summary>
+        private static void VanillaSleep()
+        {
+            var home = (FarmHouse)Game1.currentLocation;
+            var bed = home.GetPlayerBed() ?? home.GetBed();
+            Game1.player.Position = Utility.PointToVector2(bed.GetBedSpot()) * 64f;
+            home.answerDialogueAction("Sleep_Yes", null);
+        }
+
+        /// <summary>The joining player's half of the night when it has no mod. The host's half is the normal one and runs the same barriers.</summary>
+        private IEnumerable<int> NoModNight(Dictionary<string, object?> info, int day0)
+        {
+            yield return 700;
+            foreach (int w in Barrier("a")) yield return w;
+            VanillaSleep();
+            foreach (int w in WaitForDialog(900, info, "b_dialog")) yield return w;
+            foreach (int w in Barrier("b")) yield return w;
+            foreach (int w in Barrier("b2")) yield return w;
+
+            yield return 120;
+            if (Game1.activeClickableMenu is ReadyCheckDialog dialog)
+            {
+                var center = dialog.cancelButton.bounds.Center;
+                dialog.receiveLeftClick(center.X, center.Y, true);
+                yield return 90;
+            }
+            var door = (Game1.currentLocation as FarmHouse)?.getEntryLocation() ?? new Point(3, 11);
+            Game1.player.setTileLocation(new Vector2(door.X, door.Y));
+            yield return 90;
+            foreach (int w in Barrier("c")) yield return w;
+            foreach (int w in Barrier("c2")) yield return w;
+
+            // the host is in bed now, so this player goes too and the night ends
+            yield return 120;
+            VanillaSleep();
+            for (int t = 0; t < 7200 && Game1.dayOfMonth == day0; t += 60)
+                yield return 60;
+            info["d_day_changed"] = Game1.dayOfMonth != day0;
+            info["d_day_now"] = Game1.dayOfMonth;
+            yield return 600;
+            foreach (int w in Barrier("e")) yield return w;
+        }
+
         private IEnumerable<int> Night()
         {
             var info = new Dictionary<string, object?>();
@@ -290,6 +339,11 @@ namespace BedtimeRollCall.DevHarness
             int day0 = Game1.dayOfMonth;
             info["day_at_start"] = day0;
             info["time_at_start"] = Game1.timeOfDay;
+            if (_api is null)
+            {
+                foreach (int w in NoModNight(info, day0)) yield return w;
+                yield break;
+            }
 
             // A. both up, a few heartbeats exchanged
             yield return 700;

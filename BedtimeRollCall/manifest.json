@@ -6,5 +6,6 @@
     "UniqueID": "Kkthnx.BedtimeRollCall",
     "EntryDll": "BedtimeRollCall.dll",
     "MinimumApiVersion": "4.2.1",
-    "MinimumGameVersion": "1.6.15"
+    "MinimumGameVersion": "1.6.15",
+    "UpdateKeys": [ "GitHub:Kkthnx-Stardew/BedtimeRollCall" ]
 }

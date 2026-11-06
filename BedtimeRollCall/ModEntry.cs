@@ -1,18 +1,22 @@
 using System.Diagnostics;
 using BedtimeRollCall.Core;
 using BedtimeRollCall.Hud;
+using BedtimeRollCall.Integration;
 using BedtimeRollCall.Net;
 using BedtimeRollCall.Sleep;
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
+using StardewModdingAPI.Utilities;
 using StardewValley;
+using StardewValley.Menus;
 
 namespace BedtimeRollCall
 {
     /// <summary>
-    /// A panel that shows who is in bed in a co-op session and who is idle, and an idle tracker that tells the other players. It reads the
-    /// game and changes nothing in it. No Harmony, nothing saved. Uninstalling leaves the save as vanilla.
+    /// A panel that shows who is in bed in a co-op session and who is idle, an idle tracker that tells the other players, and an optional
+    /// way to take your own character to bed through the game's own sleep check. No Harmony and nothing saved, so uninstalling leaves the
+    /// save as vanilla.
     /// </summary>
     public sealed class ModEntry : Mod
     {
@@ -21,22 +25,10 @@ namespace BedtimeRollCall
         private const int MaxPanelPlayers = 8;
 
         private ModConfig _config = new();
-        private readonly AfkClock _clock = new();
-        private readonly PeerActivityBook _book = new();
+        private readonly PerScreen<ScreenState> _screen = new(() => new ScreenState());
         private readonly Stopwatch _time = Stopwatch.StartNew();
 
-        private RulesMessage? _hostRules;
-        private Point _lastTile;
-        private int _lastFacing = -1;
-        private bool _hasLastPosition;
-        private ActivityState _myActivity = ActivityState.Active;
-        private ActivityState _lastSent = ActivityState.Unknown;
-        private double _lastSentAt = double.NegativeInfinity;
-        private bool _warned;
-        private HudModel? _hud;
-        private readonly BedTrip _trip = new();
-        private bool _autoTriedToday;
-        private readonly HashSet<long> _rulesSentTo = new();
+        private ScreenState S => _screen.Value;
 
         public override void Entry(IModHelper helper)
         {
@@ -51,53 +43,43 @@ namespace BedtimeRollCall
             }
             _config.Normalize();
 
-            helper.Events.GameLoop.SaveLoaded += (_, _) => ResetSession();
-            helper.Events.GameLoop.ReturnedToTitle += (_, _) => ResetSession();
+            helper.Events.GameLoop.GameLaunched += (_, _) => ConfigMenu.Register(Helper, ModManifest, _config, Monitor);
+            helper.Events.GameLoop.SaveLoaded += (_, _) => S.Reset();
+            helper.Events.GameLoop.ReturnedToTitle += (_, _) => S.Reset();
             helper.Events.GameLoop.DayStarted += OnDayStarted;
             helper.Events.GameLoop.OneSecondUpdateTicked += OnOneSecondUpdateTicked;
-            helper.Events.GameLoop.UpdateTicked += (_, _) => _trip.Tick();
+            helper.Events.GameLoop.UpdateTicked += (_, _) => S.Trip.Tick();
             helper.Events.Input.ButtonPressed += OnButtonPressed;
             helper.Events.Input.CursorMoved += OnCursorMoved;
             helper.Events.Display.RenderedHud += OnRenderedHud;
+            helper.Events.Display.RenderedActiveMenu += OnRenderedActiveMenu;
             helper.Events.Multiplayer.ModMessageReceived += OnModMessageReceived;
             helper.Events.Multiplayer.PeerConnected += OnPeerConnected;
             helper.Events.Multiplayer.PeerDisconnected += OnPeerDisconnected;
         }
 
+        private string T(string key, object? tokens = null) => Helper.Translation.Get(key, tokens);
+
         // ---- shared rules ------------------------------------------------------
 
         /// <summary>The host's idle rules win for every player who has the mod. Without a host that has the mod, each player's own settings apply.</summary>
-        private int AfkMinutes => !Context.IsMainPlayer && _hostRules is not null ? Math.Clamp(_hostRules.AfkMinutes, 1, 30) : _config.AfkMinutes;
+        private int AfkMinutes => !Context.IsMainPlayer && S.HostRules is not null ? Math.Clamp(S.HostRules.AfkMinutes, 1, 30) : _config.AfkMinutes;
 
-        private bool AfkCountsAsReady => !Context.IsMainPlayer && _hostRules is not null ? _hostRules.AfkCountsAsReady : _config.AfkCountsAsReady;
+        private bool AfkCountsAsReady => !Context.IsMainPlayer && S.HostRules is not null ? S.HostRules.AfkCountsAsReady : _config.AfkCountsAsReady;
 
         private double Now => _time.Elapsed.TotalSeconds;
 
         // ---- state -----------------------------------------------------------------
 
-        private void ResetSession()
-        {
-            _book.Clear();
-            _hostRules = null;
-            _rulesSentTo.Clear();
-            _clock.NoteActivity();
-            _hasLastPosition = false;
-            _warned = false;
-            _hud = null;
-            _trip.Cancel();
-            _autoTriedToday = false;
-            _lastSent = ActivityState.Unknown;
-            _lastSentAt = double.NegativeInfinity;
-            _myActivity = ActivityState.Active;
-        }
-
         private void OnDayStarted(object? sender, DayStartedEventArgs e)
         {
             // everyone wakes up active, and yesterday's reports no longer match the day key
-            _clock.NoteActivity();
-            _warned = false;
-            _trip.Cancel();
-            _autoTriedToday = false;
+            S.Clock.NoteActivity();
+            S.Warned = false;
+            S.Trip.Cancel();
+            S.AutoTriedToday = false;
+            // yesterday's reports no longer match the day key, so the first report of the new day goes out at once and not at the next heartbeat
+            S.LastSent = ActivityState.Unknown;
             if (Context.IsMainPlayer && Context.IsMultiplayer)
                 SendRules(null);
         }
@@ -119,43 +101,6 @@ namespace BedtimeRollCall
                 GoToBedNow();
         }
 
-        // ---- going to bed --------------------------------------------------------
-
-        internal bool IsGoingToBed => _trip.Active;
-
-        internal double IdleSeconds => _clock.IdleSeconds;
-
-        internal ActivityState Activity => _myActivity;
-
-        /// <summary>The go to bed key. A refusal from the rules is shown to the player.</summary>
-        internal SleepBlock GoToBedNow()
-        {
-            var block = _trip.Begin();
-            if (block != SleepBlock.None)
-                Game1.addHUDMessage(new HUDMessage(Helper.Translation.Get(SleepPolicy.ReasonKey(block)), HUDMessage.error_type));
-            return block;
-        }
-
-        /// <summary>The idle player's own opt in trip. A refusal is only logged because the player did not ask for it.</summary>
-        private void StartAutoTrip()
-        {
-            var block = _trip.Begin();
-            if (block == SleepBlock.None)
-                Game1.addHUDMessage(new HUDMessage("You were idle, so you are going to bed. Press Cancel on the sleep screen to stay up.") { noIcon = true });
-            else
-                Monitor.Log($"Auto sleep did not start ({block}).", LogLevel.Trace);
-        }
-
-        public override object GetApi() => new BedtimeRollCallApi(this);
-
-        internal string[] PanelLines() => _hud is null ? Array.Empty<string>() : _hud.Lines.Select(l => l.Text).Prepend(_hud.Header).ToArray();
-
-        internal void DrawPanel(Microsoft.Xna.Framework.Graphics.SpriteBatch spriteBatch)
-        {
-            if (_hud is not null)
-                SleepHud.Draw(spriteBatch, _hud, _config.HudScale);
-        }
-
         private void OnCursorMoved(object? sender, CursorMovedEventArgs e)
         {
             if (_config.CountCursorMovementAsActivity)
@@ -164,8 +109,47 @@ namespace BedtimeRollCall
 
         private void NoteActivity()
         {
-            _clock.NoteActivity();
-            _warned = false;
+            S.Clock.NoteActivity();
+            S.Warned = false;
+        }
+
+        // ---- going to bed --------------------------------------------------------
+
+        /// <summary>The go to bed key. A refusal from the rules is shown to the player.</summary>
+        internal SleepBlock GoToBedNow()
+        {
+            var block = S.Trip.Begin();
+            if (block != SleepBlock.None)
+                Game1.addHUDMessage(new HUDMessage(T(SleepPolicy.ReasonKey(block)), HUDMessage.error_type));
+            return block;
+        }
+
+        /// <summary>The idle player's own opt in trip. A refusal is only logged because the player did not ask for it.</summary>
+        private void StartAutoTrip()
+        {
+            var block = S.Trip.Begin();
+            if (block == SleepBlock.None)
+                Game1.addHUDMessage(new HUDMessage(T("message.auto-sleep")) { noIcon = true });
+            else
+                Monitor.Log($"Auto sleep did not start ({block}).", LogLevel.Trace);
+        }
+
+        // ---- the mod's API ----------------------------------------------------------
+
+        public override object GetApi() => new BedtimeRollCallApi(this);
+
+        internal bool IsGoingToBed => S.Trip.Active;
+
+        internal double IdleSeconds => S.Clock.IdleSeconds;
+
+        internal ActivityState Activity => S.MyActivity;
+
+        internal string[] PanelLines() => S.Hud is null ? Array.Empty<string>() : S.Hud.Lines.Select(l => l.Text).Prepend(S.Hud.Header).ToArray();
+
+        internal void DrawPanel(Microsoft.Xna.Framework.Graphics.SpriteBatch spriteBatch)
+        {
+            if (S.Hud is not null)
+                SleepHud.Draw(spriteBatch, S.Hud, _config);
         }
 
         // ---- once a second -------------------------------------------------------
@@ -177,40 +161,43 @@ namespace BedtimeRollCall
 
             try
             {
+                var s = S;
                 var me = Game1.player;
                 var tile = me.TilePoint;
                 int facing = me.FacingDirection;
-                if (_hasLastPosition && (tile != _lastTile || facing != _lastFacing))
+                if (s.HasLastPosition && (tile != s.LastTile || facing != s.LastFacing))
                     NoteActivity();
-                _lastTile = tile;
-                _lastFacing = facing;
-                _hasLastPosition = true;
+                s.LastTile = tile;
+                s.LastFacing = facing;
+                s.HasLastPosition = true;
 
                 // waiting in bed, a menu, a cutscene and a festival neither add to the idle time nor reset it
                 bool counting = Context.IsPlayerFree && ReadBed(me) == BedState.Out && !Game1.isFestival();
-                _clock.Advance(1, counting);
+                s.Clock.Advance(1, counting);
 
                 double threshold = AfkMinutes * 60.0;
-                _myActivity = Game1.eventUp
+                s.MyActivity = Game1.eventUp
                     ? ActivityState.InEvent
-                    : _config.EnableAfkTracking && _clock.IsAfk(threshold) ? ActivityState.Afk : ActivityState.Active;
+                    : _config.EnableAfkTracking && s.Clock.IsAfk(threshold) ? ActivityState.Afk : ActivityState.Active;
 
-                bool warning = _config.EnableAfkTracking && counting && _clock.InWarning(threshold, _config.WarnBeforeAfkSeconds);
-                if (warning && !_warned)
+                // the warning never starts in the first half of the idle time, so a short host rule cannot warn a player the moment they stop
+                bool warning = _config.EnableAfkTracking && counting && s.Clock.InWarning(threshold, Math.Min(_config.WarnBeforeAfkSeconds, threshold / 2));
+                if (warning && !s.Warned)
                 {
-                    _warned = true;
-                    Game1.addHUDMessage(new HUDMessage($"You will show as idle in {(int)Math.Ceiling(_clock.SecondsUntilAfk(threshold))} seconds. Press any key to stay active.") { noIcon = true });
+                    s.Warned = true;
+                    Game1.addHUDMessage(new HUDMessage(T("message.idle-warning", new { seconds = (int)Math.Ceiling(s.Clock.SecondsUntilAfk(threshold)) })) { noIcon = true });
                 }
 
                 Broadcast();
-                _hud = BuildHud(me, warning ? _clock.SecondsUntilAfk(threshold) : -1);
+                s.Hud = BuildHud(warning ? s.Clock.SecondsUntilAfk(threshold) : -1);
 
-                if (_config.AutoSleepWhenIdle && _myActivity == ActivityState.Afk)
+                if (_config.AutoSleepWhenIdle && s.MyActivity == ActivityState.Afk)
                 {
-                    int othersInBed = Game1.getOnlineFarmers().Count(f => !f.IsLocalPlayer && !f.IsDedicatedPlayer && ReadBed(f) != BedState.Out);
-                    if (SleepPolicy.ShouldAutoSleep(true, true, othersInBed, _autoTriedToday, SleepPolicy.Check(BedTrip.Describe())))
+                    // only players whose sleep has really started count, so nobody is sent to bed because someone is standing on a bed tile
+                    int othersAsleep = Game1.getOnlineFarmers().Count(f => !f.IsLocalPlayer && !f.IsDedicatedPlayer && ReadBed(f) == BedState.Confirmed);
+                    if (SleepPolicy.ShouldAutoSleep(true, true, othersAsleep, s.AutoTriedToday, SleepPolicy.Check(BedTrip.Describe())))
                     {
-                        _autoTriedToday = true;
+                        s.AutoTriedToday = true;
                         StartAutoTrip();
                     }
                 }
@@ -223,15 +210,16 @@ namespace BedtimeRollCall
 
         private void Broadcast()
         {
+            var s = S;
             if (!Context.IsMultiplayer)
                 return;
-            if (_myActivity == _lastSent && Now - _lastSentAt < HeartbeatSeconds)
+            if (s.MyActivity == s.LastSent && Now - s.LastSentAt < HeartbeatSeconds)
                 return;
 
-            _lastSent = _myActivity;
-            _lastSentAt = Now;
+            s.LastSent = s.MyActivity;
+            s.LastSentAt = Now;
             Helper.Multiplayer.SendMessage(
-                new StateMessage { State = _myActivity, IdleSeconds = _clock.IdleSeconds, DayKey = CurrentDayKey() },
+                new StateMessage { State = s.MyActivity, IdleSeconds = s.Clock.IdleSeconds, DayKey = CurrentDayKey() },
                 MessageTypes.State,
                 new[] { ModManifest.UniqueID });
         }
@@ -240,16 +228,17 @@ namespace BedtimeRollCall
 
         // ---- the panel ----------------------------------------------------------
 
-        private HudModel BuildHud(Farmer me, double warnSeconds)
+        private HudModel BuildHud(double warnSeconds)
         {
+            var s = S;
             string day = CurrentDayKey();
             var farmers = Game1.getOnlineFarmers().Where(f => !f.IsDedicatedPlayer).ToList();
             var activity = new Dictionary<long, (ActivityState State, double Idle)>();
             foreach (var farmer in farmers)
             {
                 activity[farmer.UniqueMultiplayerID] = farmer.IsLocalPlayer
-                    ? (_myActivity, _clock.IdleSeconds)
-                    : _book.Get(farmer.UniqueMultiplayerID, Now, day, MaxReportAgeSeconds);
+                    ? (s.MyActivity, s.Clock.IdleSeconds)
+                    : s.Book.Get(farmer.UniqueMultiplayerID, Now, day, MaxReportAgeSeconds);
             }
 
             var tally = ReadinessTally.Compute(
@@ -257,8 +246,8 @@ namespace BedtimeRollCall
                 AfkCountsAsReady);
 
             bool festival = Game1.isFestival();
-            string header = festival ? "Festival day, sleep tools paused" : $"{tally.Ready}/{tally.Total} ready for bed";
-            Color headerColor = festival ? Color.LightGray : tally.AllReady ? Color.LightGreen : tally.Blocked.Count > 0 ? Color.Orange : Color.White;
+            string header = festival ? T("panel.festival") : T("panel.header", new { ready = tally.Ready, total = tally.Total });
+            Color headerColor = festival ? Palette.Muted : tally.AllReady ? Palette.Good : tally.Blocked.Count > 0 ? Palette.Warn : Palette.Text;
 
             var lines = new List<HudLine>();
             foreach (var farmer in farmers.Take(MaxPanelPlayers))
@@ -267,44 +256,53 @@ namespace BedtimeRollCall
                 lines.Add(DescribePlayer(farmer, ReadBed(farmer), state, idle));
             }
             if (farmers.Count > MaxPanelPlayers)
-                lines.Add(new HudLine($"and {farmers.Count - MaxPanelPlayers} more", Color.Gray));
+                lines.Add(new HudLine(T("panel.more", new { count = farmers.Count - MaxPanelPlayers }), Palette.Muted));
 
             // the game's own count of players who have confirmed sleep, when a sleep check is running
             int required = Game1.netReady.GetNumberRequired("sleep");
             if (required > 0)
-                lines.Add(new HudLine($"Game: {Game1.netReady.GetNumberReady("sleep")}/{required} confirmed", Color.LightGray));
+                lines.Add(new HudLine(T("panel.game", new { ready = Game1.netReady.GetNumberReady("sleep"), required }), Palette.Muted));
 
             if (warnSeconds >= 0)
-                lines.Add(new HudLine($"You show as idle in {(int)Math.Ceiling(warnSeconds)}s", Color.Orange));
+                lines.Add(new HudLine(T("panel.warning", new { seconds = (int)Math.Ceiling(warnSeconds) }), Palette.Warn));
 
             return new HudModel(header, headerColor, lines);
         }
 
-        private static HudLine DescribePlayer(Farmer farmer, BedState bed, ActivityState state, double idleSeconds)
+        private HudLine DescribePlayer(Farmer farmer, BedState bed, ActivityState state, double idleSeconds)
         {
-            string name = farmer.Name;
+            var name = new { name = farmer.Name };
             if (bed == BedState.Confirmed)
-                return new HudLine($"{name}, in bed and ready", Color.LightGreen);
+                return new HudLine(T("panel.asleep", name), Palette.Good);
             if (bed == BedState.InBed)
-                return new HudLine($"{name}, in bed", Color.LightGreen);
+                return new HudLine(T("panel.in-bed", name), Palette.Good);
 
             return state switch
             {
-                ActivityState.Afk => new HudLine($"{name}, idle {Math.Max(1, (int)(idleSeconds / 60))}m", Color.Orange),
-                ActivityState.InEvent => new HudLine($"{name}, in an event", Color.OrangeRed),
-                ActivityState.Unknown => new HudLine($"{name}, not tracked", Color.Gray),
-                _ => new HudLine($"{name}, up", Color.White)
+                ActivityState.Afk => new HudLine(T("panel.idle", new { name = farmer.Name, minutes = Math.Max(1, (int)(idleSeconds / 60)) }), Palette.Warn),
+                ActivityState.InEvent => new HudLine(T("panel.event", name), Palette.Alert),
+                ActivityState.Unknown => new HudLine(T("panel.untracked", name), Palette.Muted),
+                _ => new HudLine(T("panel.up", name), Palette.Text)
             };
         }
 
         private void OnRenderedHud(object? sender, RenderedHudEventArgs e)
         {
             // the panel is for sessions with other players, and it gets out of the way of every menu and cutscene
-            if (!_config.EnableHud || _hud is null || !Context.IsWorldReady || !Context.IsMultiplayer || Game1.activeClickableMenu != null || Game1.eventUp)
+            if (!ShouldDraw() || Game1.activeClickableMenu != null || Game1.eventUp)
                 return;
 
-            SleepHud.Draw(e.SpriteBatch, _hud, _config.HudScale);
+            SleepHud.Draw(e.SpriteBatch, S.Hud!, _config);
         }
+
+        /// <summary>The one menu that keeps the panel, the game's own sleep check, because waiting there is when the player wants to see who is still up.</summary>
+        private void OnRenderedActiveMenu(object? sender, RenderedActiveMenuEventArgs e)
+        {
+            if (ShouldDraw() && Game1.activeClickableMenu is ReadyCheckDialog)
+                SleepHud.Draw(e.SpriteBatch, S.Hud!, _config);
+        }
+
+        private bool ShouldDraw() => _config.EnableHud && S.Hud is not null && Context.IsWorldReady && Context.IsMultiplayer && Game1.displayHUD;
 
         // ---- messages -----------------------------------------------------------
 
@@ -316,8 +314,8 @@ namespace BedtimeRollCall
 
         private void OnPeerDisconnected(object? sender, PeerDisconnectedEventArgs e)
         {
-            _book.Remove(e.Peer.PlayerID);
-            _rulesSentTo.Remove(e.Peer.PlayerID);
+            S.Book.Remove(e.Peer.PlayerID);
+            S.RulesSentTo.Remove(e.Peer.PlayerID);
         }
 
         private void SendRules(long[]? playerIds)
@@ -340,24 +338,25 @@ namespace BedtimeRollCall
                 if (!Game1.getOnlineFarmers().Any(f => f.UniqueMultiplayerID == e.FromPlayerID))
                     return;
 
+                var s = S;
                 switch (e.Type)
                 {
                     case MessageTypes.State:
                     {
                         var message = e.ReadAs<StateMessage>();
                         if (Enum.IsDefined(message.State))
-                            _book.Update(e.FromPlayerID, message.State, Math.Max(0, message.IdleSeconds), message.DayKey ?? "", Now);
+                            s.Book.Update(e.FromPlayerID, message.State, Math.Max(0, message.IdleSeconds), message.DayKey ?? "", Now);
 
                         // the rules sent when a player connects arrive before their world is ready and are dropped, so the first report from
                         // a player with the mod is the cue to send them again
-                        if (Context.IsMainPlayer && _rulesSentTo.Add(e.FromPlayerID))
+                        if (Context.IsMainPlayer && s.RulesSentTo.Add(e.FromPlayerID))
                             SendRules(new[] { e.FromPlayerID });
                         break;
                     }
                     case MessageTypes.Rules:
                         // shared rules come from the host only
                         if (!Context.IsMainPlayer && e.FromPlayerID == Game1.MasterPlayer.UniqueMultiplayerID)
-                            _hostRules = e.ReadAs<RulesMessage>();
+                            s.HostRules = e.ReadAs<RulesMessage>();
                         break;
                 }
             }

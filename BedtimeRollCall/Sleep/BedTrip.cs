@@ -1,5 +1,6 @@
 using BedtimeRollCall.Core;
 using Microsoft.Xna.Framework;
+using Netcode;
 using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Locations;
@@ -107,6 +108,8 @@ namespace BedtimeRollCall.Sleep
             if (bed is null)
                 return false;
             Game1.player.Position = Utility.PointToVector2(bed.GetBedSpot()) * 64f;
+            // a jump, not a walk, so the other players see the farmer on the bed and not gliding there (the game does the same when it places a farmer in a bed)
+            (Game1.player.NetFields.Root as NetRoot<Farmer>)?.CancelInterpolation();
             home.answerDialogueAction("Sleep_Yes", null);
             return false;
         }

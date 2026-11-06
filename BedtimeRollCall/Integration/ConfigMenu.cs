@@ -1,3 +1,4 @@
+using BedtimeRollCall.Hud;
 using StardewModdingAPI;
 using StardewModdingAPI.Utilities;
 
@@ -17,6 +18,8 @@ namespace BedtimeRollCall.Integration
         void AddNumberOption(IManifest mod, Func<int> getValue, Action<int> setValue, Func<string> name, Func<string>? tooltip = null, int? min = null, int? max = null, int? interval = null, Func<int, string>? formatValue = null, string? fieldId = null);
 
         void AddNumberOption(IManifest mod, Func<float> getValue, Action<float> setValue, Func<string> name, Func<string>? tooltip = null, float? min = null, float? max = null, float? interval = null, Func<float, string>? formatValue = null, string? fieldId = null);
+
+        void AddTextOption(IManifest mod, Func<string> getValue, Action<string> setValue, Func<string> name, Func<string>? tooltip = null, string[]? allowedValues = null, Func<string, string>? formatAllowedValue = null, string? fieldId = null);
 
         void AddKeybindList(IManifest mod, Func<KeybindList> getValue, Action<KeybindList> setValue, Func<string> name, Func<string>? tooltip = null, string? fieldId = null);
     }
@@ -45,6 +48,13 @@ namespace BedtimeRollCall.Integration
 
                 api.AddSectionTitle(manifest, () => T("config.section.panel"));
                 api.AddBoolOption(manifest, () => config.EnableHud, v => config.EnableHud = v, () => T("config.hud.name"), () => T("config.hud.tooltip"));
+                api.AddTextOption(manifest, () => config.PanelPosition.ToString(), v => config.PanelPosition = Enum.TryParse<PanelPosition>(v, out var parsed) ? parsed : PanelPosition.TopLeft,
+                    () => T("config.position.name"), () => T("config.position.tooltip"),
+                    allowedValues: Enum.GetNames<PanelPosition>(), formatAllowedValue: v => T("config.position." + (v == nameof(PanelPosition.UnderClock) ? "under-clock" : "top-left")));
+                api.AddNumberOption(manifest, () => config.PanelOffsetX, v => config.PanelOffsetX = v, () => T("config.offset-x.name"), () => T("config.offset.tooltip"),
+                    min: -600, max: 600, interval: 10);
+                api.AddNumberOption(manifest, () => config.PanelOffsetY, v => config.PanelOffsetY = v, () => T("config.offset-y.name"), () => T("config.offset.tooltip"),
+                    min: -600, max: 600, interval: 10);
                 api.AddNumberOption(manifest, () => config.HudScale, v => config.HudScale = v, () => T("config.scale.name"), () => T("config.scale.tooltip"),
                     min: 0.8f, max: 1.4f, interval: 0.1f);
 
@@ -73,6 +83,9 @@ namespace BedtimeRollCall.Integration
             var defaults = new ModConfig();
             config.EnableHud = defaults.EnableHud;
             config.HudScale = defaults.HudScale;
+            config.PanelPosition = defaults.PanelPosition;
+            config.PanelOffsetX = defaults.PanelOffsetX;
+            config.PanelOffsetY = defaults.PanelOffsetY;
             config.EnableAfkTracking = defaults.EnableAfkTracking;
             config.AfkMinutes = defaults.AfkMinutes;
             config.WarnBeforeAfkSeconds = defaults.WarnBeforeAfkSeconds;

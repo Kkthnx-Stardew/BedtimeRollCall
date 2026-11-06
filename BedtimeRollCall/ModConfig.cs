@@ -1,3 +1,4 @@
+using BedtimeRollCall.Hud;
 using StardewModdingAPI.Utilities;
 
 namespace BedtimeRollCall
@@ -10,6 +11,15 @@ namespace BedtimeRollCall
 
         /// <summary>Size of the panel, 0.8 to 1.4.</summary>
         public float HudScale { get; set; } = 1f;
+
+        /// <summary>TopLeft is the default because the top right holds the clock, the journal button, the buffs and other mods' icons. UnderClock sits below the journal button.</summary>
+        public PanelPosition PanelPosition { get; set; } = PanelPosition.TopLeft;
+
+        /// <summary>Moves the panel right by this many pixels from where its position puts it. Negative moves it left.</summary>
+        public int PanelOffsetX { get; set; }
+
+        /// <summary>Moves the panel down by this many pixels. Negative moves it up.</summary>
+        public int PanelOffsetY { get; set; }
 
         /// <summary>Track this player's idle time and tell the others. Needed for idle players to show and to count as ready.</summary>
         public bool EnableAfkTracking { get; set; } = true;
@@ -36,6 +46,10 @@ namespace BedtimeRollCall
         public void Normalize()
         {
             HudScale = float.IsFinite(HudScale) ? Math.Clamp(HudScale, 0.8f, 1.4f) : 1f;
+            if (!Enum.IsDefined(PanelPosition))
+                PanelPosition = PanelPosition.TopLeft;
+            PanelOffsetX = Math.Clamp(PanelOffsetX, -1000, 1000);
+            PanelOffsetY = Math.Clamp(PanelOffsetY, -1000, 1000);
             AfkMinutes = Math.Clamp(AfkMinutes, 1, 30);
             WarnBeforeAfkSeconds = Math.Clamp(WarnBeforeAfkSeconds, 0, AfkMinutes * 60);
         }
